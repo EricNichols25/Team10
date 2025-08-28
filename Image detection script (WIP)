@@ -1,0 +1,11 @@
+import cv2
+import numpy as np
+import os
+
+USB_PATH = ""  
+OUTPUT_PATH = "./detected_deathstar_images"
+os.makedirs(OUTPUT_PATH, exist_ok=True)
+
+def is_red_circle_present(image):
+
+hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
