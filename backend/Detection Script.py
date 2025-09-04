@@ -20,7 +20,6 @@ def find_red_circles(image):
     mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
     red_mask = cv2.bitwise_or(mask1, mask2)
 
-    # Smooth to reduce noise
     red_mask_blur = cv2.GaussianBlur(red_mask, (9, 9), 2)
 
     # Detect circles
@@ -37,7 +36,6 @@ def find_red_circles(image):
 def crop_around_circle(image, x, y, r, padding=20):
     h, w = image.shape[:2]
 
-    # Define square bounding box around the circle
     x1 = max(x - r - padding, 0)
     y1 = max(y - r - padding, 0)
     x2 = min(x + r + padding, w)
@@ -75,4 +73,5 @@ def process_images():
 
 if __name__ == "__main__":
     process_images()
+
 
