@@ -61,11 +61,9 @@ def process_images():
         circles = find_red_circles(image)
 
         if circles is not None:
-            # You can optionally loop over all circles, but we'll just use the first one
             x, y, r = circles[0]
             cropped_img = crop_around_circle(image, x, y, r)
 
-            # Save the cropped image
             output_path = os.path.join(OUTPUT_PATH, filename)
             cv2.imwrite(output_path, cropped_img)
             detected += 1
@@ -77,3 +75,4 @@ def process_images():
 
 if __name__ == "__main__":
     process_images()
+
