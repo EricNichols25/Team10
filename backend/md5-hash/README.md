@@ -1,0 +1,1 @@
+Have to be in this directory when you run these scripts for them to work correctly (for now)
