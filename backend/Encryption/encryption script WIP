@@ -1,0 +1,26 @@
+import os
+import hashlib
+from secrets import token_bytes
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+
+# Directory
+INPUT_DIR = ''
+OUTPUT_DIR = ''
+
+# Hardcoded AES-256 key
+SECRET_KEY = b'\xe3\xb2\xf9\x8d\x17\xc6j\x99\xfd\xb6\xa6M\xef\xd7\xfd\x14\x91~\x14c\xd5&\xa7\xc2\xc1\x85\xb7X\xa1\x0c:\xd7'
+
+def encrypt_file(filepath):
+    with open(filepath, 'rb') as f:
+        data = f.read()
+
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(data) + padder.finalize()
+    
+        iv = token_bytes(16)
+
+    cipher = Cipher(algorithms.AES(SECRET_KEY), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded) + encryptor.finalize()
