@@ -6,8 +6,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
 # Directory/output settings
-INPUT_DIR = '/home/kali/Desktop/detected_deathstar_images'
-OUTPUT_DIR = '/home/kali/Desktop/encrypted_output'
+INPUT_DIR = ''
+OUTPUT_DIR = ''
 
  Hardcoded 32-byte AES-256 key
 SECRET_KEY = b'\xe3\xb2\xf9\x8d\x17\xc6j\x99\xfd\xb6\xa6M\xef\xd7\xfd\x14\x91~\x14c\xd5&\xa7\xc2\xc1\x85\xb7X\xa1\x0c:\xd7'
