@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 import os
 
-USB_PATH = "/home/kali/Desktop/TestImages"  
-OUTPUT_PATH = "./detected_deathstar_images"
+USB_PATH = "~/Desktop/TestImages"  
+OUTPUT_PATH = "~/detected_deathstar_images"
 os.makedirs(OUTPUT_PATH, exist_ok=True)
 
 def find_red_circles(image):
