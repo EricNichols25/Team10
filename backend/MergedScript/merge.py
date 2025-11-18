@@ -7,47 +7,51 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from time import perf_counter
+import zipfile
 
-# === CONFIGURATION PATHS ===
-USB_PATH = "./images"  # initial input images
+#Config Paths
+USB_PATH = "./images"  #initial input images
 OUTPUT_PATH = "./final_detected_images"
 OUTPUT_DIR_ENC = "./encrypted_images"
 OUTPUT_DIR_DEC = "./decrypted_images"
+ZIP_PATH = "./detected_images.zip"  # Zip file path
 
 os.makedirs(OUTPUT_PATH, exist_ok=True)
 os.makedirs(OUTPUT_DIR_ENC, exist_ok=True)
 os.makedirs(OUTPUT_DIR_DEC, exist_ok=True)
 
 # === SECRET KEY FOR AES ===
-# Must be exactly 32 bytes for AES-256
 SECRET_KEY = b"0123456789ABCDEF0123456789ABCDEF"
-
-# === STAGE 1: Detect & Crop Red Circles ===
 
 def find_red_circles(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    lower_red1 = np.array([0, 98, 97])
+    # Refined range
+    lower_red1 = np.array([0, 150, 150])
     upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([160, 98, 97])
+    lower_red2 = np.array([170, 150, 150])
     upper_red2 = np.array([180, 255, 255])
 
     mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
     red_mask = cv2.bitwise_or(mask1, mask2)
 
+    #Noise Reduction
+    kernel = np.ones((3,3), np.uint8)
+    red_mask = cv2.erode(red_mask, kernel, iterations=1)
+    red_mask = cv2.dilate(red_mask, kernel, iterations=2)
+
     red_mask_blur = cv2.GaussianBlur(red_mask, (9, 9), 2)
 
-    # Detect circles
     circles = cv2.HoughCircles(
         red_mask_blur,
         cv2.HOUGH_GRADIENT,
         dp=1,
         minDist=50,
         param1=100,
-        param2=30,
-        minRadius=20,
-        maxRadius=200,
+        param2=40,
+        minRadius=15,
+        maxRadius=100,
     )
 
     if circles is not None:
@@ -93,7 +97,16 @@ def process_images(input_folder, output_folder):
 
     print(f"\nTotal images with red circles cropped and saved: {detected}")
 
-# === STAGE 2: Encrypt Cropped Images ===
+# Zip the detected image
+
+def zip_images(input_folder, zip_path):
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        for file in os.listdir(input_folder):
+            if file.lower().endswith('.png'):
+                zipf.write(os.path.join(input_folder, file), file)
+    print(f"[+] Zipping complete. Zip file created at '{zip_path}'")
+
+# === Encrypt the files
 
 def encrypt_file(filepath, output_folder=OUTPUT_DIR_ENC):
     with open(filepath, "rb") as f:
@@ -110,13 +123,11 @@ def encrypt_file(filepath, output_folder=OUTPUT_DIR_ENC):
     with open(enc_path, "wb") as f:
         f.write(iv + ciphertext)
 
-def encrypt_all(input_folder=OUTPUT_PATH):
-    for file in os.listdir(input_folder):
-        if file.lower().endswith(".png"):
-            encrypt_file(os.path.join(input_folder, file))
-    print(f"[+] Encryption complete. Output in '{OUTPUT_DIR_ENC}'")
+def encrypt_zip(zip_path):
+    encrypt_file(zip_path)
+    print(f"[+] Encryption complete. Encrypted zip in '{OUTPUT_DIR_ENC}'")
 
-# === STAGE 3: Decrypt & Verify ===
+# Decrypt and unzip
 
 def decrypt_file(filepath, output_folder=OUTPUT_DIR_DEC):
     with open(filepath, "rb") as f:
@@ -133,15 +144,28 @@ def decrypt_file(filepath, output_folder=OUTPUT_DIR_DEC):
     with open(dec_path, "wb") as f:
         f.write(plaintext)
 
-def decrypt_all(input_folder=OUTPUT_DIR_ENC):
-    for file in os.listdir(input_folder):
-        if file.endswith(".enc"):
-            decrypt_file(os.path.join(input_folder, file))
-    print(f"[+] Decryption complete. Output in '{OUTPUT_DIR_DEC}'")
+def unzip_images(zip_path, output_folder):
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall(output_folder)
+    print(f"[+] Unzipping complete. Images extracted to '{output_folder}'")
 
-# === MAIN PIPELINE ===
+def decrypt_and_unzip():
+    enc_zip_path = os.path.join(OUTPUT_DIR_ENC, os.path.basename(ZIP_PATH) + ".enc")
+    if os.path.exists(enc_zip_path):
+        decrypt_file(enc_zip_path)
+        dec_zip_path = os.path.join(OUTPUT_DIR_DEC, os.path.basename(ZIP_PATH))
+        unzip_images(dec_zip_path, OUTPUT_DIR_DEC)
+        print(f"[+] Decryption and unzipping complete. Output in '{OUTPUT_DIR_DEC}'")
+    else:
+        print("[-] Encrypted zip file not found.")
+
+#Main Pipeline
 
 if __name__ == "__main__":
+    if not os.path.exists(USB_PATH):
+        print(f"Error: Input directory '{USB_PATH}' does not exist. Please create it and add your PNG images there.")
+        exit(1)
+
     start = perf_counter()
 
     PASSES = 2
@@ -162,12 +186,17 @@ if __name__ == "__main__":
 
     print(f"\nTotal time for {PASSES} passes: {perf_counter() - start:.2f} seconds")
 
-    # Step 2: Encrypt
-    print("\n=== Step 2: Encrypt ===")
-    encrypt_all()
+    # Step 2: Zip
+    print("\n=== Step 2: Zip ===")
+    zip_images(OUTPUT_PATH, ZIP_PATH)
 
-    # Step 3: Decrypt
-    print("\n=== Step 3: Decrypt ===")
-    decrypt_all()
+    # Step 3: Encrypt
+    print("\n=== Step 3: Encrypt ===")
+    encrypt_zip(ZIP_PATH)
+
+    # Step 4: Decrypt & Unzip
+    print("\n=== Step 4: Decrypt & Unzip ===")
+    decrypt_and_unzip()
 
     print("\n[✓] All stages complete.")
+
