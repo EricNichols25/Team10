@@ -2,12 +2,15 @@ import os
 import cv2
 import numpy as np
 import sys
+import zipfile
+import shutil
+import glob
 from secrets import token_bytes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from time import perf_counter
-import zipfile
+from time import perf_counter, sleep
+
 
 #Config Paths
 USB_PATH = "./images"  #initial input images
@@ -16,12 +19,9 @@ OUTPUT_DIR_ENC = "./encrypted_images"
 OUTPUT_DIR_DEC = "./decrypted_images"
 ZIP_PATH = "./detected_images.zip"  # Zip file path
 
-os.makedirs(OUTPUT_PATH, exist_ok=True)
-os.makedirs(OUTPUT_DIR_ENC, exist_ok=True)
-os.makedirs(OUTPUT_DIR_DEC, exist_ok=True)
-
 # === SECRET KEY FOR AES ===
 SECRET_KEY = b"0123456789ABCDEF0123456789ABCDEF"
+
 
 def find_red_circles(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -150,7 +150,7 @@ def unzip_images(zip_path, output_folder):
     print(f"[+] Unzipping complete. Images extracted to '{output_folder}'")
 
 def decrypt_and_unzip():
-    enc_zip_path = os.path.join(OUTPUT_DIR_ENC, os.path.basename(ZIP_PATH) + ".enc")
+    enc_zip_path = os.path.join(os.path.basename(ZIP_PATH) + ".enc")
     if os.path.exists(enc_zip_path):
         decrypt_file(enc_zip_path)
         dec_zip_path = os.path.join(OUTPUT_DIR_DEC, os.path.basename(ZIP_PATH))
@@ -160,8 +160,12 @@ def decrypt_and_unzip():
         print("[-] Encrypted zip file not found.")
 
 
+
+
 #Main Pipeline
 if __name__ == "__main__":
+
+    start = perf_counter()
 
     # pi or server
     environment = sys.argv[1] if len(sys.argv) > 1 else "server"
@@ -169,9 +173,14 @@ if __name__ == "__main__":
     if environment.lower() == "server":
         from server import transmission
         print("Running in SERVER mode.")
+
+        os.makedirs(OUTPUT_DIR_DEC, exist_ok=True)
+
         
         print("\n=== Step 4: Transmission ===")
         transmission()
+        
+        sleep(2)
 
         # Step 5: Decrypt & Unzip
         print("\n=== Step 5: Decrypt & Unzip ===")
@@ -181,14 +190,60 @@ if __name__ == "__main__":
 
         exit(0)
     
+    # === This section will only be ran inside the Pi === #
+    
     from pi import transmission
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
 
+    os.makedirs(USB_PATH, exist_ok=True)
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
+    os.makedirs(OUTPUT_DIR_ENC, exist_ok=True)
+
+
+    class NewDirHandler(FileSystemEventHandler):
+        def __init__(self, observer_instance, path_to_watch):
+            super().__init__()
+            self.observer_instance = observer_instance
+            self.path_to_watch = path_to_watch
+        
+        def on_created(self, event):
+            if event.is_directory :
+                
+                print(f"[+] New directory created: {event.src_path}")
+                
+                if event.src_path == self.path_to_watch:
+                    print('[+] Stopping observer as target directory is created.')
+                    self.observer_instance.stop()
+
+    observer = Observer()
+    event_handler = NewDirHandler(observer, "/media/usb1")
+    observer.schedule(event_handler, path="/media", recursive=False)
+    
+    observer.start()
+
+    print("[*] Monitoring '/media' for new directories...")
+
+    try:
+        while observer.is_alive():
+            sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    finally:
+        observer.join()
+        
+    print("\n[✓] Detected target directory. Moving images down...")
+
+    for img in glob.glob("/media/usb1/*.png"):
+        shutil.move(img, os.path.join(USB_PATH, os.path.basename(img)))
+
+
+    ### === 
+    print("\n[*] Starting image processing pipeline...")
 
     if not os.path.exists(USB_PATH):
         print(f"Error: Input directory '{USB_PATH}' does not exist. Please create it and add your PNG images there.")
         exit(1)
-
-    start = perf_counter()
 
     PASSES = 2
     temp_input = USB_PATH
@@ -221,9 +276,12 @@ if __name__ == "__main__":
     print(f"\n[✓] Encryption took {perf_counter() - start:.2f} seconds")
     start = perf_counter()
 
+    print('Letting pi rest for a bit...')
+    sleep(3)
+
     # Step 4: Transmission
     print("\n=== Step 4: Transmission ===")
-    transmission(ZIP_PATH)
+    transmission(f"{OUTPUT_DIR_ENC}/{os.path.basename(ZIP_PATH)}.enc")
     print(f"\nTransmission took {perf_counter() - start:.2f} seconds")
     start = perf_counter()
 

@@ -9,7 +9,7 @@ import hashlib
 PORT = "/dev/ttyUSB0"
 BAUDRATE = 115200
 CHUNK_SIZE = 250
-DELAY = 0.01 # Seconds
+DELAY = 0.05 # Seconds
 MAX_RETRIES = 5
 
 hasher = hashlib.md5()
@@ -59,8 +59,12 @@ def wait_for_header(ser):
 
 def send_ack(ser):
     print()
-    # print("Sending ACK")
+    print("Sending ACK")
     ser.write(bytes(headers["ack"].encode("utf-8") + b"\n"))
+
+    # Just hold until ack
+    # ser.readline()
+    
     
     time.sleep(DELAY)
 
@@ -73,12 +77,21 @@ def handshake(ser):
     while True:
         if ser.in_waiting > 0:
             signal = ser.readline()  # Wait for handshake signal
+            ser.flush()
             print("Received handshake signal:", signal)
             print()
 
             if signal.strip() == b"SHAKE":
                 print("Handshake signal received. Sending ACK...")
                 send_ack(ser)  # Send acknowledgment
+
+                ack = ser.readline()
+
+                print('Verifying ack')
+                print('DEBUG', ack)
+                if ack.strip() != headers["ack"].encode("utf-8"):
+                    print("Did not receive proper handshake ack. Retrying...")
+                    continue
 
                 print("Handshake complete.")
                 print()
@@ -87,7 +100,7 @@ def handshake(ser):
             else:
                 print("Invalid handshake signal. Ignoring...")
 
-        time.sleep(DELAY)
+        time.sleep(0.1)
         
 
 def wait_for_metadata(ser):
@@ -120,9 +133,9 @@ def verify_integrity(data, expected_hash):
     computed_hash = hash_value(data).hex()
 
     print()
-    print(f"Verifying data integrity...")
-    print(f"Expected Hash: {expected_hash}")
-    print(f"Computed Hash: {computed_hash}")
+    # print(f"Verifying data integrity...")
+    # print(f"Expected Hash: {expected_hash}")
+    # print(f"Computed Hash: {computed_hash}")
 
     return computed_hash == expected_hash
 
@@ -150,7 +163,7 @@ def recv_packet(ser):
         time.sleep(DELAY)
     
 
-if __name__ == "__main__":
+def transmission():
     with serial.Serial(PORT, BAUDRATE, timeout=1) as ser:
         print(f"Listening on {PORT} at {BAUDRATE} baud...")
         
@@ -163,6 +176,7 @@ if __name__ == "__main__":
         filename = ""
 
         chunk = b""
+        num = 1
 
         # Start main loop
         print()
@@ -175,7 +189,8 @@ if __name__ == "__main__":
 
             elif header == "data":
                 chunk = recv_packet(ser)
-                print(f"Received data chunk of size {len(chunk)} bytes")
+                print(f"Received data chunk of size {len(chunk)} bytes. Num {num}")
+                num += 1
 
                 send_ack(ser)
             
