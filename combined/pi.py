@@ -5,8 +5,8 @@ import hashlib
 
 PORT = "/dev/ttyUSB0"
 BAUDRATE = 115200
-CHUNK_SIZE = 2048
-DELAY = 0.01 # Seconds
+CHUNK_SIZE = 1024
+DELAY = 0.05 # Seconds
 
 headers = {
     "meta": "META".encode("utf-8").hex(),
@@ -25,18 +25,23 @@ def hash_value(data):
 
 
 def send_header(ser, header):
-    # print("\nSending header:", header, bytes(headers[header].encode("utf-8") + b"\n"))
+    print("\nSending header:", header, bytes(headers[header].encode("utf-8") + b"\n"))
     ser.write(bytes(headers[header].encode("utf-8") + b"\n"))
 
     # Wait for acknowledgment from the receiver
-    wait_for_ack(ser)
+    if header != "ack":
+        wait_for_ack(ser)
     time.sleep(DELAY)
     
 
 def wait_for_ack(ser, timeout=None):
     ack_wait = time.perf_counter()
+    n = 0
+    print("\nWaiting for ACK...")
 
     while True:
+        print(n)
+        n += 1
         if timeout and time.perf_counter() - ack_wait > timeout:
             print("Timeout waiting for ACK.")
             return False
@@ -48,6 +53,7 @@ def wait_for_ack(ser, timeout=None):
                 print("Did not receive proper ACK. Aborting transmission.")
                 return False
 
+            # send_header(ser, "ack")  # Send back ACK
             return True
 
         time.sleep(DELAY)
@@ -63,6 +69,7 @@ def handshake(ser):
         # We wait for 2 seconds for an ACK
         if wait_for_ack(ser, timeout=2):
             print("Handshake successful!")
+            send_header(ser, "ack") # Send ack that handshake is success
             return True
     
 
